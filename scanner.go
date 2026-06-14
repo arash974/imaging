@@ -239,8 +239,19 @@ func (s *scanner) scan(x1, y1, x2, y2 int, dst []uint8) {
 		for y := y1; y < y2; y++ {
 			i := y*img.Stride + x1
 			for x := x1; x < x2; x++ {
-				c := s.palette[img.Pix[i]]
 				d := dst[j : j+4 : j+4]
+				paletteIndex := int(img.Pix[i])
+				if paletteIndex >= len(s.palette) {
+					d[0] = 0
+					d[1] = 0
+					d[2] = 0
+					d[3] = 0
+					j += 4
+					i++
+					continue
+				}
+
+				c := s.palette[paletteIndex]
 				d[0] = c.R
 				d[1] = c.G
 				d[2] = c.B
@@ -249,7 +260,6 @@ func (s *scanner) scan(x1, y1, x2, y2 int, dst []uint8) {
 				i++
 			}
 		}
-
 	default:
 		j := 0
 		b := s.image.Bounds()
