@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"image"
 	"image/color"
+	"image/draw"
 	"math"
 )
 
@@ -129,7 +130,15 @@ func CropCenter(img image.Image, width, height int) *image.NRGBA {
 }
 
 // Paste pastes the img image to the background image at the specified position and returns the combined image.
+// Paste replaces destination pixels; use Composite when alpha blending is required.
 func Paste(background, img image.Image, pos image.Point) *image.NRGBA {
+	if background == nil {
+		return &image.NRGBA{}
+	}
+	if img == nil {
+		return Clone(background)
+	}
+
 	dst := Clone(background)
 	pos = pos.Sub(background.Bounds().Min)
 	pasteRect := image.Rectangle{Min: pos, Max: pos.Add(img.Bounds().Size())}
@@ -137,7 +146,7 @@ func Paste(background, img image.Image, pos image.Point) *image.NRGBA {
 	if interRect.Empty() {
 		return dst
 	}
-	if interRect.Eq(dst.Bounds()) {
+	if pasteRect.Eq(dst.Bounds()) {
 		return Clone(img)
 	}
 
@@ -153,6 +162,27 @@ func Paste(background, img image.Image, pos image.Point) *image.NRGBA {
 			src.scan(x1, y1, x2, y2, dst.Pix[i1:i2])
 		}
 	})
+	return dst
+}
+
+// Composite draws the img image over the background image at the specified position
+// using standard source-over alpha compositing and returns the combined image.
+func Composite(background, img image.Image, pos image.Point) *image.NRGBA {
+	if background == nil {
+		return &image.NRGBA{}
+	}
+
+	dst := Clone(background)
+	if img == nil {
+		return dst
+	}
+
+	pos = pos.Sub(background.Bounds().Min)
+	pasteRect := image.Rectangle{Min: pos, Max: pos.Add(img.Bounds().Size())}
+	if pasteRect.Intersect(dst.Bounds()).Empty() {
+		return dst
+	}
+	draw.Draw(dst, pasteRect, img, img.Bounds().Min, draw.Over)
 	return dst
 }
 
@@ -186,6 +216,13 @@ func PasteCenter(background, img image.Image) *image.NRGBA {
 //	dstImage := imaging.Overlay(imageOne, imageTwo, image.Pt(0, 0), 0.5)
 //
 func Overlay(background, img image.Image, pos image.Point, opacity float64) *image.NRGBA {
+	if background == nil {
+		return &image.NRGBA{}
+	}
+	if img == nil {
+		return Clone(background)
+	}
+
 	opacity = math.Min(math.Max(opacity, 0.0), 1.0) // Ensure 0.0 <= opacity <= 1.0.
 	dst := Clone(background)
 	pos = pos.Sub(background.Bounds().Min)
@@ -221,6 +258,15 @@ func Overlay(background, img image.Image, pos image.Point, opacity float64) *ima
 				coef2 := opacity * a2 / 255
 				coef1 := (1 - coef2) * a1 / 255
 				coefSum := coef1 + coef2
+				if coefSum == 0 {
+					d[0] = 0
+					d[1] = 0
+					d[2] = 0
+					d[3] = 0
+					i += 4
+					j += 4
+					continue
+				}
 				coef1 /= coefSum
 				coef2 /= coefSum
 
