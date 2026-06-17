@@ -26,6 +26,13 @@ func newScanner(img image.Image) *scanner {
 	return s
 }
 
+func safeByte(p []uint8, i int, fallback uint8) uint8 {
+	if i < 0 || i >= len(p) {
+		return fallback
+	}
+	return p[i]
+}
+
 // scan scans the given rectangular region of the image into dst.
 func (s *scanner) scan(x1, y1, x2, y2 int, dst []uint8) {
 	switch img := s.image.(type) {
@@ -198,9 +205,9 @@ func (s *scanner) scan(x1, y1, x2, y2 int, dst []uint8) {
 					ic = img.COffset(x, y)
 				}
 
-				yy1 := int32(img.Y[iy]) * 0x10101
-				cb1 := int32(img.Cb[ic]) - 128
-				cr1 := int32(img.Cr[ic]) - 128
+				yy1 := int32(safeByte(img.Y, iy, 0)) * 0x10101
+				cb1 := int32(safeByte(img.Cb, ic, 128)) - 128
+				cr1 := int32(safeByte(img.Cr, ic, 128)) - 128
 
 				r := yy1 + 91881*cr1
 				if uint32(r)&0xff000000 == 0 {
@@ -240,8 +247,8 @@ func (s *scanner) scan(x1, y1, x2, y2 int, dst []uint8) {
 			i := y*img.Stride + x1
 			for x := x1; x < x2; x++ {
 				d := dst[j : j+4 : j+4]
-				paletteIndex := int(img.Pix[i])
-				if paletteIndex >= len(s.palette) {
+				paletteIndex := int(safeByte(img.Pix, i, 0))
+				if i < 0 || i >= len(img.Pix) || paletteIndex >= len(s.palette) {
 					d[0] = 0
 					d[1] = 0
 					d[2] = 0
