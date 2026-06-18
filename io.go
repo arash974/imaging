@@ -1,8 +1,10 @@
 package imaging
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"image"
 	"image/draw"
 	"image/gif"
@@ -33,6 +35,10 @@ var fs fileSystem = localFS{}
 
 type decodeConfig struct {
 	autoOrientation bool
+	maxPixels       int
+	maxWidth        int
+	maxHeight       int
+	maxEncodedBytes int64
 }
 
 var defaultDecodeConfig = decodeConfig{
@@ -51,11 +57,163 @@ func AutoOrientation(enabled bool) DecodeOption {
 	}
 }
 
+// MaxPixels returns a DecodeOption that rejects images whose decoded dimensions
+// exceed max total pixels. Values less than or equal to zero disable this limit.
+func MaxPixels(max int) DecodeOption {
+	return func(c *decodeConfig) {
+		c.maxPixels = max
+	}
+}
+
+// MaxWidth returns a DecodeOption that rejects images wider than max pixels.
+// Values less than or equal to zero disable this limit.
+func MaxWidth(max int) DecodeOption {
+	return func(c *decodeConfig) {
+		c.maxWidth = max
+	}
+}
+
+// MaxHeight returns a DecodeOption that rejects images taller than max pixels.
+// Values less than or equal to zero disable this limit.
+func MaxHeight(max int) DecodeOption {
+	return func(c *decodeConfig) {
+		c.maxHeight = max
+	}
+}
+
+// MaxEncodedBytes returns a DecodeOption that rejects encoded data larger than max bytes.
+// Values less than or equal to zero disable this limit.
+func MaxEncodedBytes(max int64) DecodeOption {
+	return func(c *decodeConfig) {
+		c.maxEncodedBytes = max
+	}
+}
+
+// ErrImageTooLarge means decoded image dimensions exceed configured limits.
+var ErrImageTooLarge = errors.New("imaging: image exceeds configured decode limits")
+
+// ErrEncodedImageTooLarge means encoded image data exceeds the configured byte limit.
+var ErrEncodedImageTooLarge = errors.New("imaging: encoded image exceeds configured decode byte limit")
+
+func hasDecodeLimits(c decodeConfig) bool {
+	return c.maxPixels > 0 || c.maxWidth > 0 || c.maxHeight > 0 || c.maxEncodedBytes > 0
+}
+
+func validateDecodedConfig(meta image.Config, c decodeConfig) error {
+	if c.maxWidth > 0 && meta.Width > c.maxWidth {
+		return fmt.Errorf("%w: width %d exceeds max width %d", ErrImageTooLarge, meta.Width, c.maxWidth)
+	}
+	if c.maxHeight > 0 && meta.Height > c.maxHeight {
+		return fmt.Errorf("%w: height %d exceeds max height %d", ErrImageTooLarge, meta.Height, c.maxHeight)
+	}
+	if c.maxPixels > 0 {
+		pixels := int64(meta.Width) * int64(meta.Height)
+		if pixels > int64(c.maxPixels) {
+			return fmt.Errorf("%w: %d pixels exceeds max pixels %d", ErrImageTooLarge, pixels, c.maxPixels)
+		}
+	}
+	return nil
+}
+
+func readAllWithLimit(r io.Reader, max int64) ([]byte, error) {
+	if max <= 0 {
+		return ioutil.ReadAll(r)
+	}
+
+	var buf bytes.Buffer
+	limited := &io.LimitedReader{R: r, N: max + 1}
+	if _, err := buf.ReadFrom(limited); err != nil {
+		return nil, err
+	}
+	if int64(buf.Len()) > max {
+		return nil, ErrEncodedImageTooLarge
+	}
+	return buf.Bytes(), nil
+}
+
+func decodeBytes(data []byte, cfg decodeConfig) (image.Image, error) {
+	meta, _, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	if err := validateDecodedConfig(meta, cfg); err != nil {
+		return nil, err
+	}
+
+	var orient orientation
+	if cfg.autoOrientation {
+		orient = readOrientation(bytes.NewReader(data))
+	}
+
+	img, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	if cfg.autoOrientation {
+		img = fixOrientation(img, orient)
+	}
+	return img, nil
+}
+
+func decodeWithLimits(r io.Reader, cfg decodeConfig) (image.Image, error) {
+	if cfg.maxEncodedBytes > 0 {
+		data, err := readAllWithLimit(r, cfg.maxEncodedBytes)
+		if err != nil {
+			return nil, err
+		}
+		return decodeBytes(data, cfg)
+	}
+
+	if rs, ok := r.(io.ReadSeeker); ok {
+		pos, err := rs.Seek(0, io.SeekCurrent)
+		if err == nil {
+			meta, _, err := image.DecodeConfig(rs)
+			_, seekErr := rs.Seek(pos, io.SeekStart)
+			if err != nil {
+				return nil, err
+			}
+			if seekErr != nil {
+				return nil, seekErr
+			}
+			if err := validateDecodedConfig(meta, cfg); err != nil {
+				return nil, err
+			}
+
+			var orient orientation
+			if cfg.autoOrientation {
+				orient = readOrientation(rs)
+				if _, err := rs.Seek(pos, io.SeekStart); err != nil {
+					return nil, err
+				}
+			}
+
+			img, _, err := image.Decode(rs)
+			if err != nil {
+				return nil, err
+			}
+			if cfg.autoOrientation {
+				img = fixOrientation(img, orient)
+			}
+			return img, nil
+		}
+	}
+
+	data, err := readAllWithLimit(r, cfg.maxEncodedBytes)
+	if err != nil {
+		return nil, err
+	}
+	return decodeBytes(data, cfg)
+}
+
 // Decode reads an image from r.
 func Decode(r io.Reader, opts ...DecodeOption) (image.Image, error) {
 	cfg := defaultDecodeConfig
 	for _, option := range opts {
 		option(&cfg)
+	}
+
+	if hasDecodeLimits(cfg) {
+		return decodeWithLimits(r, cfg)
 	}
 
 	if !cfg.autoOrientation {
