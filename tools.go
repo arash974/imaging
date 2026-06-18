@@ -188,6 +188,13 @@ func Composite(background, img image.Image, pos image.Point) *image.NRGBA {
 
 // PasteCenter pastes the img image to the center of the background image and returns the combined image.
 func PasteCenter(background, img image.Image) *image.NRGBA {
+	if background == nil {
+		return &image.NRGBA{}
+	}
+	if img == nil {
+		return Clone(background)
+	}
+
 	bgBounds := background.Bounds()
 	bgW := bgBounds.Dx()
 	bgH := bgBounds.Dy()
@@ -287,6 +294,13 @@ func Overlay(background, img image.Image, pos image.Point, opacity float64) *ima
 // returns the combined image. Opacity parameter is the opacity of the img
 // image layer, used to compose the images, it must be from 0.0 to 1.0.
 func OverlayCenter(background, img image.Image, opacity float64) *image.NRGBA {
+	if background == nil {
+		return &image.NRGBA{}
+	}
+	if img == nil {
+		return Clone(background)
+	}
+
 	bgBounds := background.Bounds()
 	bgW := bgBounds.Dx()
 	bgH := bgBounds.Dy()
