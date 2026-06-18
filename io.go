@@ -16,6 +16,7 @@ import (
 
 	"golang.org/x/image/bmp"
 	"golang.org/x/image/tiff"
+	_ "golang.org/x/image/webp"
 )
 
 type fileSystem interface {
@@ -42,7 +43,7 @@ var defaultDecodeConfig = decodeConfig{
 type DecodeOption func(*decodeConfig)
 
 // AutoOrientation returns a DecodeOption that sets the auto-orientation mode.
-// If auto-orientation is enabled, the image will be transformed after decoding
+// If auto-orientation is enabled, JPEG images will be transformed after decoding
 // according to the EXIF orientation tag (if present). By default it's disabled.
 func AutoOrientation(enabled bool) DecodeOption {
 	return func(c *decodeConfig) {
@@ -89,7 +90,7 @@ func Decode(r io.Reader, opts ...DecodeOption) (image.Image, error) {
 //	// Load an image from file.
 //	img, err := imaging.Open("test.jpg")
 //
-//	// Load an image and transform it depending on the EXIF orientation tag (if present).
+//	// Load a JPEG image and transform it depending on the EXIF orientation tag (if present).
 //	img, err := imaging.Open("test.jpg", imaging.AutoOrientation(true))
 //
 func Open(filename string, opts ...DecodeOption) (image.Image, error) {
@@ -111,6 +112,7 @@ const (
 	GIF
 	TIFF
 	BMP
+	WEBP
 )
 
 var formatExts = map[string]Format{
@@ -121,6 +123,7 @@ var formatExts = map[string]Format{
 	"tif":  TIFF,
 	"tiff": TIFF,
 	"bmp":  BMP,
+	"webp": WEBP,
 }
 
 var formatNames = map[Format]string{
@@ -129,6 +132,7 @@ var formatNames = map[Format]string{
 	GIF:  "GIF",
 	TIFF: "TIFF",
 	BMP:  "BMP",
+	WEBP: "WEBP",
 }
 
 func (f Format) String() string {
@@ -139,7 +143,7 @@ func (f Format) String() string {
 var ErrUnsupportedFormat = errors.New("imaging: unsupported image format")
 
 // FormatFromExtension parses image format from filename extension:
-// "jpg" (or "jpeg"), "png", "gif", "tif" (or "tiff") and "bmp" are supported.
+// "jpg" (or "jpeg"), "png", "gif", "tif" (or "tiff"), "bmp" and "webp" are supported.
 func FormatFromExtension(ext string) (Format, error) {
 	if f, ok := formatExts[strings.ToLower(strings.TrimPrefix(ext, "."))]; ok {
 		return f, nil
@@ -148,7 +152,7 @@ func FormatFromExtension(ext string) (Format, error) {
 }
 
 // FormatFromFilename parses image format from filename:
-// "jpg" (or "jpeg"), "png", "gif", "tif" (or "tiff") and "bmp" are supported.
+// "jpg" (or "jpeg"), "png", "gif", "tif" (or "tiff"), "bmp" and "webp" are supported.
 func FormatFromFilename(filename string) (Format, error) {
 	ext := filepath.Ext(filename)
 	return FormatFromExtension(ext)
@@ -214,6 +218,7 @@ func PNGCompressionLevel(level png.CompressionLevel) EncodeOption {
 }
 
 // Encode writes the image img to w in the specified format (JPEG, PNG, GIF, TIFF or BMP).
+// WEBP decoding is supported through Decode/Open, but WEBP encoding is not currently supported.
 func Encode(w io.Writer, img image.Image, format Format, opts ...EncodeOption) error {
 	cfg := defaultEncodeConfig
 	for _, option := range opts {
@@ -248,6 +253,9 @@ func Encode(w io.Writer, img image.Image, format Format, opts ...EncodeOption) e
 
 	case BMP:
 		return bmp.Encode(w, img)
+
+	case WEBP:
+		return ErrUnsupportedFormat
 	}
 
 	return ErrUnsupportedFormat
@@ -255,7 +263,8 @@ func Encode(w io.Writer, img image.Image, format Format, opts ...EncodeOption) e
 
 // Save saves the image to file with the specified filename.
 // The format is determined from the filename extension:
-// "jpg" (or "jpeg"), "png", "gif", "tif" (or "tiff") and "bmp" are supported.
+// "jpg" (or "jpeg"), "png", "gif", "tif" (or "tiff") and "bmp" are supported for encoding.
+// WEBP decoding is supported, but WEBP encoding is not currently supported.
 //
 // Examples:
 //
@@ -299,9 +308,9 @@ const (
 )
 
 // readOrientation tries to read the orientation EXIF flag from image data in r.
-// If the EXIF data block is not found or the orientation flag is not found
-// or any other error occures while reading the data, it returns the
-// orientationUnspecified (0) value.
+// It currently supports JPEG EXIF orientation. If the EXIF data block is not found,
+// the orientation flag is not found, or any error occurs while reading the data, it
+// returns orientationUnspecified (0).
 func readOrientation(r io.Reader) orientation {
 	const (
 		markerSOI      = 0xffd8
