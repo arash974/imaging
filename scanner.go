@@ -37,25 +37,17 @@ func safeByte(p []uint8, i int, fallback uint8) uint8 {
 func (s *scanner) scan(x1, y1, x2, y2 int, dst []uint8) {
 	switch img := s.image.(type) {
 	case *image.NRGBA:
-		size := (x2 - x1) * 4
 		j := 0
-		i := y1*img.Stride + x1*4
-		if size == 4 {
-			for y := y1; y < y2; y++ {
+		for y := y1; y < y2; y++ {
+			i := y*img.Stride + x1*4
+			for x := x1; x < x2; x++ {
 				d := dst[j : j+4 : j+4]
-				s := img.Pix[i : i+4 : i+4]
-				d[0] = s[0]
-				d[1] = s[1]
-				d[2] = s[2]
-				d[3] = s[3]
-				j += size
-				i += img.Stride
-			}
-		} else {
-			for y := y1; y < y2; y++ {
-				copy(dst[j:j+size], img.Pix[i:i+size])
-				j += size
-				i += img.Stride
+				d[0] = safeByte(img.Pix, i+0, 0)
+				d[1] = safeByte(img.Pix, i+1, 0)
+				d[2] = safeByte(img.Pix, i+2, 0)
+				d[3] = safeByte(img.Pix, i+3, 0)
+				j += 4
+				i += 4
 			}
 		}
 
@@ -64,12 +56,11 @@ func (s *scanner) scan(x1, y1, x2, y2 int, dst []uint8) {
 		for y := y1; y < y2; y++ {
 			i := y*img.Stride + x1*8
 			for x := x1; x < x2; x++ {
-				s := img.Pix[i : i+8 : i+8]
 				d := dst[j : j+4 : j+4]
-				d[0] = s[0]
-				d[1] = s[2]
-				d[2] = s[4]
-				d[3] = s[6]
+				d[0] = safeByte(img.Pix, i+0, 0)
+				d[1] = safeByte(img.Pix, i+2, 0)
+				d[2] = safeByte(img.Pix, i+4, 0)
+				d[3] = safeByte(img.Pix, i+6, 0)
 				j += 4
 				i += 8
 			}
@@ -81,7 +72,7 @@ func (s *scanner) scan(x1, y1, x2, y2 int, dst []uint8) {
 			i := y*img.Stride + x1*4
 			for x := x1; x < x2; x++ {
 				d := dst[j : j+4 : j+4]
-				a := img.Pix[i+3]
+				a := safeByte(img.Pix, i+3, 0)
 				switch a {
 				case 0:
 					d[0] = 0
@@ -89,16 +80,14 @@ func (s *scanner) scan(x1, y1, x2, y2 int, dst []uint8) {
 					d[2] = 0
 					d[3] = a
 				case 0xff:
-					s := img.Pix[i : i+4 : i+4]
-					d[0] = s[0]
-					d[1] = s[1]
-					d[2] = s[2]
+					d[0] = safeByte(img.Pix, i+0, 0)
+					d[1] = safeByte(img.Pix, i+1, 0)
+					d[2] = safeByte(img.Pix, i+2, 0)
 					d[3] = a
 				default:
-					s := img.Pix[i : i+4 : i+4]
-					r16 := uint16(s[0])
-					g16 := uint16(s[1])
-					b16 := uint16(s[2])
+					r16 := uint16(safeByte(img.Pix, i+0, 0))
+					g16 := uint16(safeByte(img.Pix, i+1, 0))
+					b16 := uint16(safeByte(img.Pix, i+2, 0))
 					a16 := uint16(a)
 					d[0] = uint8(r16 * 0xff / a16)
 					d[1] = uint8(g16 * 0xff / a16)
@@ -115,23 +104,22 @@ func (s *scanner) scan(x1, y1, x2, y2 int, dst []uint8) {
 		for y := y1; y < y2; y++ {
 			i := y*img.Stride + x1*8
 			for x := x1; x < x2; x++ {
-				s := img.Pix[i : i+8 : i+8]
 				d := dst[j : j+4 : j+4]
-				a := s[6]
+				a := safeByte(img.Pix, i+6, 0)
 				switch a {
 				case 0:
 					d[0] = 0
 					d[1] = 0
 					d[2] = 0
 				case 0xff:
-					d[0] = s[0]
-					d[1] = s[2]
-					d[2] = s[4]
+					d[0] = safeByte(img.Pix, i+0, 0)
+					d[1] = safeByte(img.Pix, i+2, 0)
+					d[2] = safeByte(img.Pix, i+4, 0)
 				default:
-					r32 := uint32(s[0])<<8 | uint32(s[1])
-					g32 := uint32(s[2])<<8 | uint32(s[3])
-					b32 := uint32(s[4])<<8 | uint32(s[5])
-					a32 := uint32(s[6])<<8 | uint32(s[7])
+					r32 := uint32(safeByte(img.Pix, i+0, 0))<<8 | uint32(safeByte(img.Pix, i+1, 0))
+					g32 := uint32(safeByte(img.Pix, i+2, 0))<<8 | uint32(safeByte(img.Pix, i+3, 0))
+					b32 := uint32(safeByte(img.Pix, i+4, 0))<<8 | uint32(safeByte(img.Pix, i+5, 0))
+					a32 := uint32(safeByte(img.Pix, i+6, 0))<<8 | uint32(safeByte(img.Pix, i+7, 0))
 					d[0] = uint8((r32 * 0xffff / a32) >> 8)
 					d[1] = uint8((g32 * 0xffff / a32) >> 8)
 					d[2] = uint8((b32 * 0xffff / a32) >> 8)
@@ -147,7 +135,7 @@ func (s *scanner) scan(x1, y1, x2, y2 int, dst []uint8) {
 		for y := y1; y < y2; y++ {
 			i := y*img.Stride + x1
 			for x := x1; x < x2; x++ {
-				c := img.Pix[i]
+				c := safeByte(img.Pix, i, 0)
 				d := dst[j : j+4 : j+4]
 				d[0] = c
 				d[1] = c
@@ -163,7 +151,7 @@ func (s *scanner) scan(x1, y1, x2, y2 int, dst []uint8) {
 		for y := y1; y < y2; y++ {
 			i := y*img.Stride + x1*2
 			for x := x1; x < x2; x++ {
-				c := img.Pix[i]
+				c := safeByte(img.Pix, i, 0)
 				d := dst[j : j+4 : j+4]
 				d[0] = c
 				d[1] = c
