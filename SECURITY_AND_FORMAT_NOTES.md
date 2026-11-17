@@ -1,5 +1,9 @@
 # Security and format support notes
 
+## Compiler and dependencies
+
+The fork targets Go 1.27.4 and uses `golang.org/x/image` v0.45.0. GitHub Actions checks Linux and Windows with that exact compiler and runs the race detector on Linux. The dependency cache is verified before and after the checks.
+
 ## Decode limits for untrusted uploads
 
 For user-uploaded or otherwise untrusted images, prefer decoding with explicit limits:

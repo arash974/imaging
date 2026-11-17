@@ -1,8 +1,7 @@
 # Imaging
 
 [![PkgGoDev](https://pkg.go.dev/badge/github.com/disintegration/imaging)](https://pkg.go.dev/github.com/disintegration/imaging)
-[![Build Status](https://travis-ci.org/disintegration/imaging.svg?branch=master)](https://travis-ci.org/disintegration/imaging)
-[![Coverage Status](https://coveralls.io/repos/github/disintegration/imaging/badge.svg?branch=master&service=github)](https://coveralls.io/github/disintegration/imaging?branch=master)
+[![Go 1.27.4](https://github.com/arash974/imaging/actions/workflows/ci.yml/badge.svg)](https://github.com/arash974/imaging/actions/workflows/ci.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/disintegration/imaging)](https://goreportcard.com/report/github.com/disintegration/imaging)
 
 Package imaging provides basic image processing functions (resize, rotate, crop, brightness/contrast adjustments, etc.).
@@ -12,7 +11,14 @@ as an input, and return a new image of `*image.NRGBA` type (32bit RGBA colors, n
 
 ## Installation
 
-    go get -u github.com/disintegration/imaging
+This maintained fork requires Go 1.27.4. The original module path is preserved for API compatibility. Consuming applications must select `github.com/arash974/imaging` with a pinned Go module replacement. Resolve the fork's current commit to an immutable pseudo-version with:
+
+```sh
+go list -m -json github.com/arash974/imaging@master
+```
+
+Use the returned `Version` in the replacement for `github.com/disintegration/imaging`, and commit the resolved version and checksums in the consuming project. CI verifies the exact Go 1.27.4 compiler on Linux and Windows, including the unit suite, static analysis, module integrity and the Linux race detector.
+
 
 ## Documentation
 
@@ -159,7 +165,7 @@ img, err := imaging.Open("test.jpg", imaging.AutoOrientation(true))
 [imaging](https://github.com/disintegration/imaging)
 is designed to be a lightweight and simple image manipulation package.
 It provides basic image processing functions and a few helper functions
-such as `Open` and `Save`. It consistently returns *image.NRGBA image 
+such as `Open` and `Save`. It consistently returns *image.NRGBA image
 type (8 bits per channel, RGBA).
 
 [gift](https://github.com/disintegration/gift)
